@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Sales Coach AI</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #fff;
+      overflow: hidden;
+    }
+
+    .screen {
+      height: 100vh;
+      width: 100vw;
+      display: none;
+      flex-direction: column;
+    }
+    .screen.active { display: flex; }
+
+    /* Start screen */
+    #start-screen {
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+    }
+    #start-screen h1 {
+      font-size: 24px;
+      font-weight: 600;
+      letter-spacing: -0.5px;
+    }
+    #start-screen p {
+      color: #666;
+      font-size: 14px;
+      max-width: 280px;
+      text-align: center;
+    }
+    .btn {
+      background: #fff;
+      color: #0a0a0a;
+      border: none;
+      border-radius: 999px;
+      padding: 16px 40px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.15s ease, opacity 0.15s ease;
+    }
+    .btn:active { transform: scale(0.96); opacity: 0.85; }
+    .btn.secondary {
+      background: transparent;
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 10px 22px;
+      font-size: 14px;
+    }
+
+    /* Live screen */
+    #live-screen { padding: 16px; gap: 16px; }
+
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 4px 0;
+    }
+    .live-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .pulse-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #ff3b30;
+      box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.6);
+      animation: pulse 1.6s infinite;
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.6); }
+      70% { box-shadow: 0 0 0 10px rgba(255, 59, 48, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); }
+    }
+    .live-text {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      color: #ff3b30;
+    }
+
+    .suggestion-card {
+      flex: 0 0 60%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #1a1a2e;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      padding: 28px;
+      text-align: center;
+      overflow: hidden;
+    }
+    #suggestion-text {
+      font-size: 20px;
+      font-weight: 500;
+      line-height: 1.5;
+      color: #fff;
+      opacity: 0;
+      transition: opacity 300ms ease;
+    }
+    #suggestion-text.visible { opacity: 1; }
+    #suggestion-text.placeholder { color: #555; font-weight: 400; font-size: 16px; }
+
+    .transcript-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      gap: 8px;
+    }
+    .transcript-label {
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      color: #444;
+      font-weight: 700;
+      padding-left: 4px;
+    }
+    #transcript-feed {
+      flex: 1;
+      overflow-y: auto;
+      color: #666;
+      font-size: 14px;
+      line-height: 1.6;
+      padding: 4px;
+      scroll-behavior: smooth;
+    }
+    #transcript-feed .line { margin-bottom: 6px; }
+    #transcript-feed .line.interim { color: #444; font-style: italic; }
+
+    .end-bar {
+      display: flex;
+      justify-content: center;
+      padding-top: 4px;
+    }
+
+    /* Summary screen */
+    #summary-screen {
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+    #summary-screen h2 { font-size: 22px; font-weight: 600; }
+    .summary-stats {
+      display: flex;
+      gap: 32px;
+      margin: 16px 0 28px;
+    }
+    .stat { text-align: center; }
+    .stat .value { font-size: 28px; font-weight: 700; }
+    .stat .label { font-size: 12px; color: #666; letter-spacing: 1px; margin-top: 4px; }
+  </style>
+</head>
+<body>
+
+  <!-- Start screen -->
+  <div id="start-screen" class="screen active">
+    <h1>Sales Coach AI</h1>
+    <p>Live transcription and real-time suggestions while you're on the call.</p>
+    <button id="start-btn" class="btn">Start Session</button>
+  </div>
+
+  <!-- Live session screen -->
+  <div id="live-screen" class="screen">
+    <div class="top-bar">
+      <div class="live-indicator">
+        <span class="pulse-dot"></span>
+        <span class="live-text">LIVE</span>
+      </div>
+      <button id="end-btn" class="btn secondary">End Session</button>
+    </div>
+
+    <div class="suggestion-card">
+      <div id="suggestion-text" class="placeholder visible">Listening for the conversation to begin…</div>
+    </div>
+
+    <div class="transcript-section">
+      <div class="transcript-label">TRANSCRIPT</div>
+      <div id="transcript-feed"></div>
+    </div>
+  </div>
+
+  <!-- Summary screen -->
+  <div id="summary-screen" class="screen">
+    <h2>Session ended</h2>
+    <div class="summary-stats">
+      <div class="stat">
+        <div id="summary-duration" class="value">0:00</div>
+        <div class="label">DURATION</div>
+      </div>
+      <div class="stat">
+        <div id="summary-count" class="value">0</div>
+        <div class="label">MESSAGES</div>
+      </div>
+    </div>
+    <button id="restart-btn" class="btn">Start New Session</button>
+  </div>
+
+  <script>
+    const startScreen = document.getElementById('start-screen');
+    const liveScreen = document.getElementById('live-screen');
+    const summaryScreen = document.getElementById('summary-screen');
+
+    const startBtn = document.getElementById('start-btn');
+    const endBtn = document.getElementById('end-btn');
+    const restartBtn = document.getElementById('restart-btn');
+
+    const suggestionEl = document.getElementById('suggestion-text');
+    const transcriptFeed = document.getElementById('transcript-feed');
+    const summaryDuration = document.getElementById('summary-duration');
+    const summaryCount = document.getElementById('summary-count');
+
+    let ws = null;
+    let audioContext = null;
+    let mediaStream = null;
+    let workletNode = null;
+    let interimLine = null;
+    let sessionStart = null;
+    let messageCount = 0;
+
+    const PROCESSOR = `
+      class PCMProcessor extends AudioWorkletProcessor {
+        process(inputs) {
+          const input = inputs[0];
+          if (input && input[0]) {
+            const float32 = input[0];
+            const int16 = new Int16Array(float32.length);
+            for (let i = 0; i < float32.length; i++) {
+              const s = Math.max(-1, Math.min(1, float32[i]));
+              int16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+            }
+            this.port.postMessage(int16.buffer, [int16.buffer]);
+          }
+          return true;
+        }
+      }
+      registerProcessor('pcm-processor', PCMProcessor);
+    `;
+
+    function showScreen(screen) {
+      [startScreen, liveScreen, summaryScreen].forEach((s) => s.classList.remove('active'));
+      screen.classList.add('active');
+    }
+
+    function setSuggestion(text, isPlaceholder) {
+      suggestionEl.classList.remove('visible');
+      setTimeout(() => {
+        suggestionEl.textContent = text;
+        suggestionEl.classList.toggle('placeholder', Boolean(isPlaceholder));
+        suggestionEl.classList.add('visible');
+      }, 300);
+    }
+
+    function appendTranscript(text, isFinal) {
+      if (!isFinal) {
+        if (!interimLine) {
+          interimLine = document.createElement('div');
+          interimLine.className = 'line interim';
+          transcriptFeed.appendChild(interimLine);
+        }
+        interimLine.textContent = text;
+      } else {
+        if (interimLine) {
+          interimLine.remove();
+          interimLine = null;
+        }
+        const line = document.createElement('div');
+        line.className = 'line';
+        line.textContent = text;
+        transcriptFeed.appendChild(line);
+        messageCount += 1;
+      }
+      transcriptFeed.scrollTop = transcriptFeed.scrollHeight;
+    }
+
+    async function startSession() {
+      sessionStart = Date.now();
+      messageCount = 0;
+      transcriptFeed.innerHTML = '';
+      interimLine = null;
+      setSuggestion('Listening for the conversation to begin…', true);
+
+      const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+      ws = new WebSocket(`${protocol}://${location.host}/ws`);
+      ws.binaryType = 'arraybuffer';
+
+      ws.onopen = async () => {
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioContext = new AudioContext({ sampleRate: 16000 });
+
+        const blob = new Blob([PROCESSOR], { type: 'application/javascript' });
+        await audioContext.audioWorklet.addModule(URL.createObjectURL(blob));
+
+        const source = audioContext.createMediaStreamSource(mediaStream);
+        workletNode = new AudioWorkletNode(audioContext, 'pcm-processor');
+
+        workletNode.port.onmessage = (event) => {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(event.data);
+          }
+        };
+
+        source.connect(workletNode);
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+
+        if (data.type === 'transcript') {
+          appendTranscript(data.text, data.isFinal);
+        } else if (data.type === 'suggestion') {
+          setSuggestion(data.text, false);
+        } else if (data.type === 'error') {
+          setSuggestion(data.message, true);
+        }
+      };
+
+      ws.onclose = () => {
+        if (liveScreen.classList.contains('active')) endSession();
+      };
+
+      showScreen(liveScreen);
+    }
+
+    function teardownAudio() {
+      if (workletNode) workletNode.disconnect();
+      if (audioContext) audioContext.close();
+      if (mediaStream) mediaStream.getTracks().forEach((track) => track.stop());
+      if (ws) ws.close();
+
+      workletNode = null;
+      audioContext = null;
+      mediaStream = null;
+      ws = null;
+    }
+
+    function endSession() {
+      teardownAudio();
+
+      const elapsedMs = sessionStart ? Date.now() - sessionStart : 0;
+      const totalSeconds = Math.floor(elapsedMs / 1000);
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+
+      summaryDuration.textContent = `${minutes}:${String(seconds).padStart(2, '0')}`;
+      summaryCount.textContent = String(messageCount);
+
+      showScreen(summaryScreen);
+    }
+
+    startBtn.addEventListener('click', async () => {
+      try {
+        await startSession();
+      } catch (err) {
+        teardownAudio();
+        alert(`Could not start session: ${err.message}`);
+      }
+    });
+
+    endBtn.addEventListener('click', endSession);
+    restartBtn.addEventListener('click', () => showScreen(startScreen));
+  </script>
+</body>
+</html>
