@@ -6,6 +6,7 @@ import { WebSocketServer } from "ws";
 import { DeepgramClient } from "@deepgram/sdk";
 import Groq from "groq-sdk";
 import routes from "./routes/index.js";
+import { COACH_SYSTEM_PROMPT } from "./prompts/coach.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -38,6 +39,9 @@ wss.on("connection", async (ws, req) => {
     dgConnection = await client.listen.v1.connect({
       model: "nova-3",
       language: "en",
+      encoding: "linear16",
+      sample_rate: "16000",
+      channels: "1",
       punctuate: "true",
       interim_results: "true",
       smart_format: "true",
@@ -141,17 +145,7 @@ wss.on("connection", async (ws, req) => {
       messages: [
         {
           role: "system",
-          content: `You are a real-time sales co-pilot on a live sales call. Read the transcript and give the sales rep ONE short confident line they can say right now to move the conversation forward. 
-
-Rules:
-- Maximum 2 sentences. Never more.
-- Sound natural, never scripted
-- Never say "you should" or "try saying" — just give the line
-- No labels, no preamble, no explanation
-- If objection: reframe around value not price
-- If silence or stalling: give a soft pull question  
-- If buying signal: give a gentle close line
-- Output the suggestion text only`,
+          content: COACH_SYSTEM_PROMPT,
         },
         {
           role: "user",
