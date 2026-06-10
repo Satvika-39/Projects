@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sales Coach AI</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+      gap: 1.5rem;
+    }
+
+    h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.5px; }
+    .subtitle { color: #94a3b8; font-size: 0.9rem; }
+
+    #ws-status {
+      font-size: 0.75rem;
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      background: #1e293b;
+      color: #64748b;
+    }
+    #ws-status.connected { background: #14532d; color: #86efac; }
+    #ws-status.disconnected { background: #450a0a; color: #fca5a5; }
+
+    .card {
+      width: 100%;
+      max-width: 680px;
+      background: #1e293b;
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+    }
+    .card-title {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #64748b;
+      margin-bottom: 0.75rem;
+    }
+
+    /* Recording button */
+    #record-btn {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.75rem 1.5rem;
+      border-radius: 999px;
+      border: none;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: #3b82f6;
+      color: #fff;
+      transition: background 0.15s, transform 0.1s;
+    }
+    #record-btn:hover { background: #2563eb; }
+    #record-btn.recording { background: #ef4444; }
+    #record-btn.recording:hover { background: #dc2626; }
+    #record-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .recording .dot {
+      animation: pulse 1s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* Transcript */
+    #transcript-box {
+      min-height: 80px;
+      font-size: 1rem;
+      line-height: 1.6;
+      color: #e2e8f0;
+      white-space: pre-wrap;
+    }
+    #interim { color: #64748b; }
+
+    /* Coaching */
+    #coaching-box {
+      min-height: 60px;
+      font-size: 0.95rem;
+      line-height: 1.6;
+      color: #e2e8f0;
+    }
+    #coaching-box.loading { color: #64748b; font-style: italic; }
+    #coaching-box.tip { color: #86efac; }
+    #coaching-box.error { color: #fca5a5; }
+
+    .actions {
+      width: 100%;
+      max-width: 680px;
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+    .btn-secondary {
+      padding: 0.5rem 1.1rem;
+      border-radius: 0.5rem;
+      border: 1px solid #334155;
+      background: transparent;
+      color: #94a3b8;
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+    .btn-secondary:hover { border-color: #64748b; color: #e2e8f0; }
+    .btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <h1>🎙 Sales Coach AI</h1>
+  <p class="subtitle">Speak during your sales call — get real-time coaching from AI</p>
+  <div id="ws-status" class="disconnected">Connecting…</div>
+
+  <div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap;justify-content:center">
+    <button id="record-btn" disabled>
+      <span class="dot"></span>
+      <span id="btn-label">Start Recording</span>
+    </button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Live Transcript</div>
+    <div id="transcript-box"><span style="color:#334155">Transcript will appear here…</span></div>
+    <span id="interim"></span>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Coaching Tip</div>
+    <div id="coaching-box" style="color:#334155">Coaching tips will appear after each utterance…</div>
+  </div>
+
+  <div class="actions">
+    <button class="btn-secondary" id="feedback-btn" disabled>Get Full Feedback</button>
+    <button class="btn-secondary" id="clear-btn">Clear</button>
+  </div>
+
+  <script>
+    const wsStatus   = document.getElementById("ws-status");
+    const recordBtn  = document.getElementById("record-btn");
+    const btnLabel   = document.getElementById("btn-label");
+    const txBox      = document.getElementById("transcript-box");
+    const interimEl  = document.getElementById("interim");
+    const coachBox   = document.getElementById("coaching-box");
+    const feedbackBtn = document.getElementById("feedback-btn");
+    const clearBtn   = document.getElementById("clear-btn");
+
+    // ── WebSocket setup ────────────────────────────────────────────────────
+    const protocol = location.protocol === "https:" ? "wss" : "ws";
+    const ws = new WebSocket(protocol + "://" + location.host + "/ws");
+
+    ws.addEventListener("open", () => {
+      wsStatus.textContent = "Connected";
+      wsStatus.className = "connected";
+      recordBtn.disabled = false;
+    });
+
+    ws.addEventListener("close", () => {
+      wsStatus.textContent = "Disconnected";
+      wsStatus.className = "disconnected";
+      recordBtn.disabled = true;
+      stopRecording();
+    });
+
+    ws.addEventListener("message", (evt) => {
+      const msg = JSON.parse(evt.data);
+
+      if (msg.type === "ready") {
+        coachBox.textContent = "Listening…";
+        coachBox.className = "loading";
+      }
+
+      if (msg.type === "transcript") {
+        if (msg.is_final) {
+          // Append final text to transcript box
+          if (txBox.querySelector("span[style]")) txBox.innerHTML = "";
+          txBox.textContent += (txBox.textContent ? " " : "") + msg.text;
+          interimEl.textContent = "";
+          feedbackBtn.disabled = false;
+        } else {
+          interimEl.textContent = " " + msg.text;
+        }
+      }
+
+      if (msg.type === "coaching_loading") {
+        coachBox.textContent = "Thinking…";
+        coachBox.className = "loading";
+      }
+
+      if (msg.type === "coaching") {
+        coachBox.textContent = "💡 " + msg.tip;
+        coachBox.className = "tip";
+      }
+
+      if (msg.type === "coaching_error") {
+        coachBox.textContent = "⚠️ " + msg.message;
+        coachBox.className = "error";
+      }
+
+      if (msg.type === "error") {
+        coachBox.textContent = "❌ " + msg.message;
+        coachBox.className = "error";
+      }
+
+      if (msg.type === "stopped") {
+        if (msg.transcript) {
+          coachBox.textContent = "Session ended. Click 'Get Full Feedback' for a summary.";
+          coachBox.className = "";
+        }
+      }
+    });
+
+    // ── MediaRecorder ──────────────────────────────────────────────────────
+    let mediaRecorder = null;
+    let recording = false;
+
+    recordBtn.addEventListener("click", async () => {
+      if (!recording) {
+        await startRecording();
+      } else {
+        stopRecording();
+      }
+    });
+
+    async function startRecording() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+        // Pick the best supported MIME type for Deepgram
+        const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg"]
+          .find((t) => MediaRecorder.isTypeSupported(t)) || "";
+
+        mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+
+        mediaRecorder.addEventListener("dataavailable", (e) => {
+          if (e.data.size > 0 && ws.readyState === ws.OPEN) {
+            ws.send(e.data);
+          }
+        });
+
+        ws.send(JSON.stringify({ type: "start" }));
+        mediaRecorder.start(250); // send chunks every 250ms
+
+        recording = true;
+        recordBtn.classList.add("recording");
+        btnLabel.textContent = "Stop Recording";
+      } catch (err) {
+        coachBox.textContent = "❌ Microphone access denied: " + err.message;
+        coachBox.className = "error";
+      }
+    }
+
+    function stopRecording() {
+      if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+        mediaRecorder.stream.getTracks().forEach((t) => t.stop());
+        mediaRecorder = null;
+      }
+      if (ws.readyState === ws.OPEN) {
+        ws.send(JSON.stringify({ type: "stop" }));
+      }
+      recording = false;
+      recordBtn.classList.remove("recording");
+      btnLabel.textContent = "Start Recording";
+    }
+
+    feedbackBtn.addEventListener("click", () => {
+      ws.send(JSON.stringify({ type: "get_feedback" }));
+    });
+
+    clearBtn.addEventListener("click", () => {
+      txBox.innerHTML = '<span style="color:#334155">Transcript will appear here…</span>';
+      interimEl.textContent = "";
+      coachBox.textContent = "Coaching tips will appear after each utterance…";
+      coachBox.style.color = "#334155";
+      coachBox.className = "";
+      feedbackBtn.disabled = true;
+    });
+  </script>
+</body>
+</html>
