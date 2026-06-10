@@ -1,166 +1,117 @@
-import express from "express";
-import { createServer } from "http";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
-import { WebSocketServer } from "ws";
-import { DeepgramClient } from "@deepgram/sdk";
-import Groq from "groq-sdk";
-import routes from "./routes/index.js";
-import { COACH_SYSTEM_PROMPT } from "./prompts/coach.js";
+import 'dotenv/config';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+import express from 'express';
+import { createServer } from 'http';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { WebSocketServer, WebSocket } from 'ws';
+import { createClient, LiveTranscriptionEvents } from '@deepgram/sdk';
+import Groq from 'groq-sdk';
+
+import { COACH_PROMPT } from './prompts/coach.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 const server = createServer(app);
 
-app.use(express.json());
-app.use(express.static(join(__dirname, "public")));
-app.use("/api", routes);
+app.use(express.static(path.join(__dirname, 'public')));
 
-// ── WebSocket ──────────────────────────────────────────────────────────────
-const wss = new WebSocketServer({ server, path: "/ws" });
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
-wss.on("connection", async (ws, req) => {
-  console.log("[ws] client connected from", req.socket.remoteAddress);
+const wss = new WebSocketServer({ server, path: '/ws' });
 
-  const groq = new Groq(); // reads GROQ_API_KEY from env
+wss.on('connection', (ws) => {
+  console.log('Client connected');
 
-  let dgConnection = null;
-  let fullTranscript = "";
-  let speechFinalBuffer = "";
+  const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
+  const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+  const dgConnection = deepgram.listen.live({
+    model: 'nova-3',
+    encoding: 'linear16',
+    sample_rate: 16000,
+    channels: 1,
+    interim_results: true,
+    punctuate: true,
+  });
 
   function send(obj) {
-    if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj));
+    if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
   }
 
-  async function openDeepgram() {
-    const client = new DeepgramClient(); // reads DEEPGRAM_API_KEY from env
+  async function getGroqSuggestion(transcript) {
+    try {
+      const completion = await groq.chat.completions.create({
+        model: 'llama3-70b-8192',
+        max_tokens: 100,
+        temperature: 0.7,
+        messages: [
+          { role: 'system', content: COACH_PROMPT },
+          { role: 'user', content: transcript },
+        ],
+      });
 
-    dgConnection = await client.listen.v1.connect({
-      model: "nova-3",
-      language: "en",
-      encoding: "linear16",
-      sample_rate: "16000",
-      channels: "1",
-      punctuate: "true",
-      interim_results: "true",
-      smart_format: "true",
-      vad_events: "true",
-      utterance_end_ms: "1500",
-    });
-
-    dgConnection.on("open", () => {
-      console.log("[deepgram] connection open");
-      send({ type: "ready", message: "Listening…" });
-      dgConnection.connect();
-    });
-
-    dgConnection.on("message", async (data) => {
-      if (data.type !== "Results") return;
-
-      const alt = data.channel?.alternatives?.[0];
-      const text = alt?.transcript ?? "";
-      if (!text) return;
-
-      send({ type: "transcript", text, is_final: data.is_final });
-
-      if (data.is_final) {
-        speechFinalBuffer += (speechFinalBuffer ? " " : "") + text;
-        fullTranscript += (fullTranscript ? " " : "") + text;
-      }
-
-      // On speech_final, request a coaching tip for the last utterance
-      if (data.speech_final && speechFinalBuffer.trim()) {
-        const utterance = speechFinalBuffer.trim();
-        speechFinalBuffer = "";
-        send({ type: "coaching_loading" });
-        try {
-          const tip = await getCoachingTip(utterance);
-          send({ type: "coaching", tip });
-        } catch (err) {
-          console.error("[groq] error:", err.message);
-          send({ type: "coaching_error", message: err.message });
-        }
-      }
-    });
-
-    dgConnection.on("error", (err) => {
-      console.error("[deepgram] error:", err);
-      send({ type: "error", message: String(err) });
-    });
-
-    dgConnection.on("close", () => {
-      console.log("[deepgram] connection closed");
-      dgConnection = null;
-    });
-
-    await dgConnection.waitForOpen();
+      const text = completion.choices[0]?.message?.content ?? '';
+      send({ type: 'suggestion', text });
+    } catch (err) {
+      console.error('Groq error:', err.message);
+    }
   }
 
-  ws.on("message", async (data, isBinary) => {
+  dgConnection.on(LiveTranscriptionEvents.Open, () => {
+    console.log('Deepgram connected');
+    send({ type: 'status', text: 'Ready' });
+  });
+
+  dgConnection.on(LiveTranscriptionEvents.Transcript, (data) => {
+    const transcript = data.channel.alternatives[0].transcript;
+    const isFinal = data.speech_final;
+
+    if (transcript === '') return;
+
+    send({ type: 'transcript', text: transcript, is_final: isFinal });
+
+    if (isFinal && transcript) {
+      getGroqSuggestion(transcript);
+    }
+  });
+
+  dgConnection.on(LiveTranscriptionEvents.Error, (err) => {
+    console.error('Deepgram error:', err);
+  });
+
+  dgConnection.on(LiveTranscriptionEvents.Close, () => {
+    console.log('Deepgram closed');
+  });
+
+  ws.on('message', (data, isBinary) => {
     if (isBinary) {
-      if (dgConnection) dgConnection.socket.send(data);
+      dgConnection.send(data);
       return;
     }
 
     let msg;
-    try { msg = JSON.parse(data.toString()); } catch { return; }
+    try {
+      msg = JSON.parse(data.toString());
+    } catch {
+      return;
+    }
 
-    if (msg.type === "start") {
-      fullTranscript = "";
-      speechFinalBuffer = "";
-      try {
-        await openDeepgram();
-      } catch (err) {
-        console.error("[deepgram] failed to open:", err.message);
-        send({ type: "error", message: "Could not connect to Deepgram: " + err.message });
-      }
-    } else if (msg.type === "stop") {
-      if (dgConnection) {
-        dgConnection.socket.close();
-        dgConnection = null;
-      }
-      send({ type: "stopped", transcript: fullTranscript });
-    } else if (msg.type === "get_feedback") {
-      if (fullTranscript.trim()) {
-        try {
-          send({ type: "coaching_loading" });
-          const tip = await getCoachingTip(fullTranscript);
-          send({ type: "coaching", tip });
-        } catch (err) {
-          send({ type: "coaching_error", message: err.message });
-        }
-      }
+    if (msg.type === 'stop') {
+      dgConnection.requestClose();
     }
   });
 
-  ws.on("close", () => {
-    console.log("[ws] client disconnected");
-    if (dgConnection) { dgConnection.socket.close(); dgConnection = null; }
+  ws.on('close', () => {
+    dgConnection.requestClose();
+    console.log('Client disconnected');
   });
-
-  async function getCoachingTip(transcript) {
-    const chat = await groq.chat.completions.create({
-      model: "llama3-8b-8192",
-      messages: [
-        {
-          role: "system",
-          content: COACH_SYSTEM_PROMPT,
-        },
-        {
-          role: "user",
-          content: `Sales rep said: "${transcript}"\n\nGive one specific coaching tip.`,
-        },
-      ],
-      max_tokens: 150,
-      temperature: 0.7,
-    });
-    return chat.choices[0]?.message?.content ?? "No tip available.";
-  }
 });
 
-// ── Start ──────────────────────────────────────────────────────────────────
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
-  console.log(`sales-coach-ai listening on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
