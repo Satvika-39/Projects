@@ -15,8 +15,6 @@ const PORT = process.env.PORT || 8080;
 const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY;
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
-const SUGGESTION_INTERVAL_MS = 10_000;
-
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -50,6 +48,7 @@ wss.on('connection', (browserSocket) => {
   }
 
   const deepgramSocket = deepgram.listen.live({
+    model: 'nova-3',
     encoding: 'linear16',
     sample_rate: 16000,
     channels: 1,
@@ -58,7 +57,6 @@ wss.on('connection', (browserSocket) => {
   });
 
   let pendingFinalTranscript = '';
-  let suggestionTimer = null;
   let suggestionInFlight = false;
 
   const send = (payload) => {
@@ -94,9 +92,8 @@ wss.on('connection', (browserSocket) => {
         const delta = chunk.choices?.[0]?.delta?.content || '';
         if (!delta) continue;
         suggestion += delta;
-        send({ type: 'suggestion', text: suggestion.trim(), done: false });
+        send({ type: 'suggestion', text: suggestion.trim() });
       }
-      send({ type: 'suggestion', text: suggestion.trim(), done: true });
     } catch (err) {
       console.error('Groq error:', err.message);
       send({ type: 'error', message: 'Failed to generate suggestion' });
@@ -105,16 +102,8 @@ wss.on('connection', (browserSocket) => {
     }
   };
 
-  const cleanup = () => {
-    if (suggestionTimer) {
-      clearInterval(suggestionTimer);
-      suggestionTimer = null;
-    }
-  };
-
   deepgramSocket.on(LiveTranscriptionEvents.Open, () => {
     console.log('Connected to Deepgram');
-    suggestionTimer = setInterval(requestSuggestion, SUGGESTION_INTERVAL_MS);
   });
 
   deepgramSocket.on(LiveTranscriptionEvents.Transcript, (data) => {
@@ -122,10 +111,14 @@ wss.on('connection', (browserSocket) => {
     if (!transcript) return;
 
     const isFinal = Boolean(data.is_final);
-    send({ type: 'transcript', text: transcript, isFinal });
+    send({ type: 'transcript', text: transcript, is_final: isFinal });
 
     if (isFinal) {
       pendingFinalTranscript += `${transcript} `;
+    }
+
+    if (data.speech_final) {
+      requestSuggestion();
     }
   });
 
@@ -136,7 +129,6 @@ wss.on('connection', (browserSocket) => {
 
   deepgramSocket.on(LiveTranscriptionEvents.Close, () => {
     console.log('Deepgram connection closed');
-    cleanup();
     if (browserSocket.readyState === WebSocket.OPEN) browserSocket.close();
   });
 
@@ -149,7 +141,6 @@ wss.on('connection', (browserSocket) => {
 
   browserSocket.on('close', () => {
     console.log('Browser disconnected');
-    cleanup();
     deepgramSocket.requestClose();
   });
 
