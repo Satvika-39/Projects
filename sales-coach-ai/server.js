@@ -31,6 +31,7 @@ wss.on('connection', (ws) => {
 
   const dgConnection = deepgram.listen.live({
     model: 'nova-3',
+    language: 'en',
     encoding: 'linear16',
     sample_rate: 16000,
     channels: 1,
@@ -68,13 +69,14 @@ wss.on('connection', (ws) => {
 
   dgConnection.on(LiveTranscriptionEvents.Transcript, (data) => {
     const transcript = data.channel.alternatives[0].transcript;
-    const isFinal = data.speech_final;
+    const isFinal = data.is_final;
+    const speechFinal = data.speech_final;
 
-    if (transcript === '') return;
+    if (!transcript || transcript.trim() === '') return;
 
     send({ type: 'transcript', text: transcript, is_final: isFinal });
 
-    if (isFinal && transcript) {
+    if (speechFinal) {
       getGroqSuggestion(transcript);
     }
   });
