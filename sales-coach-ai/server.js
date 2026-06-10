@@ -1,15 +1,18 @@
-require('dotenv').config();
+import 'dotenv/config';
 
-const path = require('path');
-const express = require('express');
-const { WebSocketServer, WebSocket } = require('ws');
-const { createClient, LiveTranscriptionEvents } = require('@deepgram/sdk');
-const Groq = require('groq-sdk');
+import path from 'path';
+import { fileURLToPath } from 'url';
+import express from 'express';
+import { WebSocketServer, WebSocket } from 'ws';
+import { createClient, LiveTranscriptionEvents } from '@deepgram/sdk';
+import Groq from 'groq-sdk';
 
-const { COACH_SYSTEM_PROMPT } = require('./prompts/coach');
-const repsRouter = require('./routes/reps');
-const callsRouter = require('./routes/calls');
-const coachingRouter = require('./routes/coaching');
+import { COACH_SYSTEM_PROMPT } from './prompts/coach.js';
+import repsRouter from './routes/reps.js';
+import callsRouter from './routes/calls.js';
+import coachingRouter from './routes/coaching.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const PORT = process.env.PORT || 8080;
 const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY;

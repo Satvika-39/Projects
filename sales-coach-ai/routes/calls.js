@@ -1,4 +1,4 @@
-const express = require('express');
+import express from 'express';
 
 const router = express.Router();
 
@@ -35,4 +35,4 @@ router.post('/:id/end', (req, res) => {
   res.json(call);
 });
 
-module.exports = router;
+export default router;

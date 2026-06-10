@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Real-time sales call co-pilot: live transcription with Deepgram and AI suggestions via Groq",
   "main": "server.js",
+  "type": "module",
   "scripts": {
     "start": "node server.js"
   },
