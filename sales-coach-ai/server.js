@@ -1,5 +1,7 @@
 import 'dotenv/config';
 
+console.log('GROQ key present:', !!process.env.GROQ_API_KEY);
+
 import express from 'express';
 import { createServer } from 'http';
 import path from 'path';
@@ -46,7 +48,7 @@ wss.on('connection', (ws) => {
   async function getGroqSuggestion(transcript) {
     try {
       const completion = await groq.chat.completions.create({
-        model: 'llama3-70b-8192',
+        model: 'llama-3.3-70b-versatile',
         max_tokens: 100,
         temperature: 0.7,
         messages: [
@@ -58,7 +60,7 @@ wss.on('connection', (ws) => {
       const text = completion.choices[0]?.message?.content ?? '';
       send({ type: 'suggestion', text });
     } catch (err) {
-      console.error('Groq error:', err.message);
+      console.error('Groq error:', err.status, err.message, err.error ?? '');
     }
   }
 
@@ -77,6 +79,7 @@ wss.on('connection', (ws) => {
     send({ type: 'transcript', text: transcript, is_final: isFinal });
 
     if (speechFinal) {
+      console.log('speech_final fired:', transcript);
       getGroqSuggestion(transcript);
     }
   });
