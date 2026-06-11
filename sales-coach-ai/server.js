@@ -61,6 +61,10 @@ wss.on('connection', (ws) => {
       send({ type: 'suggestion', text });
     } catch (err) {
       console.error('Groq error:', err.status, err.message, err.error ?? '');
+      send({
+        type: 'debug',
+        text: 'GROQ ERROR: ' + err.message + (err.status ? ' status: ' + err.status : ''),
+      });
     }
   }
 
@@ -80,6 +84,7 @@ wss.on('connection', (ws) => {
 
     if (speechFinal) {
       console.log('speech_final fired:', transcript);
+      send({ type: 'debug', text: 'speech_final fired, calling Groq...' });
       getGroqSuggestion(transcript);
     }
   });

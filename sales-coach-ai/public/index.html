@@ -187,6 +187,21 @@
       font-weight: 700;
       cursor: pointer;
     }
+
+    /* Debug panel */
+    #debug-panel {
+      flex: 0 0 80px;
+      height: 80px;
+      background: #000;
+      color: #0f0;
+      font-family: monospace;
+      font-size: 10px;
+      line-height: 1.4;
+      overflow-y: scroll;
+      padding: 4px 8px;
+      margin: 0 16px 16px;
+      border-radius: 8px;
+    }
   </style>
 </head>
 <body>
@@ -215,6 +230,8 @@
       <div class="label">Live Transcript</div>
       <div id="transcript-text"></div>
     </div>
+
+    <div id="debug-panel"></div>
   </div>
 
   <div id="end-screen" class="screen">
@@ -238,6 +255,7 @@
     const transcriptText = document.getElementById('transcript-text');
     const transcriptSection = document.getElementById('transcript-section');
     const endDuration = document.getElementById('end-duration');
+    const debugPanel = document.getElementById('debug-panel');
 
     let ws = null;
     let audioContext = null;
@@ -249,6 +267,13 @@
     function showScreen(screen) {
       [startScreen, liveScreen, endScreen].forEach((s) => s.classList.remove('active'));
       screen.classList.add('active');
+    }
+
+    function debugLog(text) {
+      const line = document.createElement('div');
+      line.textContent = text;
+      debugPanel.appendChild(line);
+      debugPanel.scrollTop = debugPanel.scrollHeight;
     }
 
     function setSuggestion(text) {
@@ -298,6 +323,7 @@
 
       startError.style.display = 'none';
       transcriptText.innerHTML = '';
+      debugPanel.innerHTML = '';
       interimSpan = null;
       suggestionText.textContent = 'Listening...';
       suggestionText.classList.add('placeholder');
@@ -310,6 +336,8 @@
       ws = new WebSocket(protocol + '://' + location.host + '/ws');
 
       ws.onmessage = (event) => {
+        debugLog(event.data.substring(0, 200));
+
         const msg = JSON.parse(event.data);
 
         if (msg.type === 'status') {
@@ -322,6 +350,10 @@
 
         if (msg.type === 'suggestion') {
           setSuggestion(msg.text);
+        }
+
+        if (msg.type === 'debug') {
+          // already logged above, no further action
         }
       };
 
