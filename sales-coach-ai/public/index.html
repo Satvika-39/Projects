@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Sales Coach AI</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0a0a0a;
+      color: #fff;
+    }
+
+    .screen {
+      display: none;
+      height: 100vh;
+      width: 100vw;
+      flex-direction: column;
+    }
+    .screen.active { display: flex; }
+
+    /* Start screen */
+    #start-screen {
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+    }
+    #start-screen h1 {
+      font-size: 28px;
+      font-weight: 700;
+    }
+    #start-screen .subtitle {
+      color: #666;
+      font-size: 16px;
+      margin-top: 12px;
+    }
+    #context-input {
+      margin-top: 32px;
+      width: 100%;
+      max-width: 320px;
+      background: #1a1a2e;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 14px 16px;
+      color: #fff;
+      font-size: 15px;
+      outline: none;
+      font-family: inherit;
+    }
+    #context-input::placeholder { color: #555; }
+    #start-btn {
+      margin-top: 24px;
+      border-radius: 999px;
+      background: #fff;
+      color: #0a0a0a;
+      border: none;
+      padding: 16px 48px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    #start-error {
+      margin-top: 24px;
+      color: #ff5b5b;
+      font-size: 14px;
+      display: none;
+    }
+
+    /* Live screen */
+    #live-screen { padding-top: 48px; padding-bottom: 80px; }
+
+    .top-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      z-index: 10;
+    }
+    .live-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .pulse-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #ff3b30;
+      animation: pulse 1.4s infinite;
+    }
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.3; }
+      100% { opacity: 1; }
+    }
+    .live-text {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: #fff;
+    }
+    #end-btn {
+      background: transparent;
+      border: 1px solid #ff3b30;
+      color: #ff3b30;
+      border-radius: 999px;
+      padding: 6px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* Suggestion card */
+    #suggestion-card {
+      flex: 6;
+      background: #1a1a2e;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 24px;
+      margin: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      min-height: 0;
+    }
+    #suggestion-text {
+      color: #fff;
+      font-size: 20px;
+      line-height: 1.5;
+      text-align: center;
+      opacity: 1;
+      transition: opacity 300ms ease;
+    }
+    #suggestion-text.placeholder { color: #444; }
+
+    /* Transcript section */
+    #transcript-section {
+      flex: 4;
+      background: #111;
+      border-radius: 12px;
+      margin: 0 16px 16px;
+      padding: 16px;
+      overflow-y: scroll;
+      min-height: 0;
+    }
+    #transcript-section .label {
+      color: #444;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+    #transcript-text {
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    #transcript-text .final { color: #888; }
+    #transcript-text .interim { color: #555; }
+
+    /* Debrief screen */
+    #debrief-screen { padding-top: 48px; }
+    #debrief-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 16px;
+      padding-bottom: calc(80px + 20px);
+    }
+    #debrief-title {
+      font-size: 24px;
+      font-weight: 700;
+      text-align: center;
+    }
+    #debrief-meta {
+      color: #666;
+      font-size: 14px;
+      text-align: center;
+      margin-top: 8px;
+      margin-bottom: 24px;
+    }
+    .glass-card {
+      background: #1a1a2e;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 12px;
+    }
+    .debrief-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .debrief-card-text {
+      color: #fff;
+      font-size: 17px;
+      line-height: 1.5;
+    }
+    .identity-text {
+      font-style: italic;
+      color: #a78bfa;
+      font-size: 17px;
+      line-height: 1.5;
+    }
+    #new-call-btn {
+      display: block;
+      margin: 24px auto 0;
+      border-radius: 999px;
+      background: #fff;
+      color: #0a0a0a;
+      border: none;
+      padding: 16px 48px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    /* End screen (fallback) */
+    #end-screen {
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+    }
+    #end-screen h1 {
+      font-size: 24px;
+      font-weight: 700;
+    }
+    #end-screen .duration {
+      color: #888;
+      font-size: 16px;
+      margin-top: 16px;
+    }
+    #end-screen .thanks {
+      color: #666;
+      font-size: 14px;
+      margin-top: 8px;
+    }
+    #restart-btn {
+      margin-top: 48px;
+      border-radius: 999px;
+      background: #fff;
+      color: #0a0a0a;
+      border: none;
+      padding: 16px 48px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    /* Debug panel - fixed at bottom, visible on live + debrief screens */
+    #debug-panel {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 80px;
+      background: #000;
+      color: #0f0;
+      font-family: monospace;
+      font-size: 10px;
+      line-height: 1.4;
+      overflow-y: scroll;
+      padding: 4px 8px;
+      z-index: 5;
+      display: none;
+    }
+    #debug-panel.visible { display: block; }
+  </style>
+</head>
+<body>
+
+  <div id="start-screen" class="screen active">
+    <h1>Sales Coach AI</h1>
+    <p class="subtitle">Real-time call assistance</p>
+    <input id="context-input" type="text"
+      placeholder="What are you selling today? (optional)"
+      maxlength="100" />
+    <button id="start-btn">Start Session</button>
+    <p id="start-error">Mic access needed</p>
+  </div>
+
+  <div id="live-screen" class="screen">
+    <div class="top-bar">
+      <div class="live-indicator">
+        <span class="pulse-dot"></span>
+        <span class="live-text">LIVE</span>
+      </div>
+      <button id="end-btn">End</button>
+    </div>
+
+    <div id="suggestion-card">
+      <div id="suggestion-text" class="placeholder">Listening...</div>
+    </div>
+
+    <div id="transcript-section">
+      <div class="label">Live Transcript</div>
+      <div id="transcript-text"></div>
+    </div>
+  </div>
+
+  <div id="debrief-screen" class="screen">
+    <div class="top-bar">
+      <span style="font-size: 16px; font-weight: 700;">Call Complete</span>
+      <div></div>
+    </div>
+    <div id="debrief-scroll">
+      <h1 id="debrief-title" style="display:none;"></h1>
+      <p id="debrief-meta"></p>
+      <div class="glass-card">
+        <div class="debrief-label" style="color: #4ade80;">WHAT YOU DID WELL</div>
+        <p id="debrief-win" class="debrief-card-text"></p>
+      </div>
+      <div class="glass-card">
+        <div class="debrief-label" style="color: #60a5fa;">TRY NEXT CALL</div>
+        <p id="debrief-growth" class="debrief-card-text"></p>
+      </div>
+      <div class="glass-card">
+        <p id="debrief-identity" class="identity-text"></p>
+      </div>
+      <button id="new-call-btn">New Call</button>
+    </div>
+  </div>
+
+  <div id="end-screen" class="screen">
+    <h1>Session ended</h1>
+    <p id="end-duration" class="duration"></p>
+    <p class="thanks">Thanks for using Sales Coach AI</p>
+    <button id="restart-btn">Start New Session</button>
+  </div>
+
+  <div id="debug-panel"></div>
+
+  <script>
+    const startScreen = document.getElementById('start-screen');
+    const liveScreen = document.getElementById('live-screen');
+    const debriefScreen = document.getElementById('debrief-screen');
+    const endScreen = document.getElementById('end-screen');
+    const debugPanel = document.getElementById('debug-panel');
+
+    const startBtn = document.getElementById('start-btn');
+    const startError = document.getElementById('start-error');
+    const endBtn = document.getElementById('end-btn');
+    const newCallBtn = document.getElementById('new-call-btn');
+    const restartBtn = document.getElementById('restart-btn');
+    const contextInput = document.getElementById('context-input');
+
+    const suggestionText = document.getElementById('suggestion-text');
+    const transcriptText = document.getElementById('transcript-text');
+    const transcriptSection = document.getElementById('transcript-section');
+    const endDuration = document.getElementById('end-duration');
+    const debriefMeta = document.getElementById('debrief-meta');
+    const debriefWin = document.getElementById('debrief-win');
+    const debriefGrowth = document.getElementById('debrief-growth');
+    const debriefIdentity = document.getElementById('debrief-identity');
+
+    let ws = null;
+    let audioContext = null;
+    let mediaStream = null;
+    let processor = null;
+    let sessionStart = null;
+    let interimSpan = null;
+    let debriefTimeout = null;
+    let waitingForDebrief = false;
+
+    function showScreen(screen) {
+      [startScreen, liveScreen, debriefScreen, endScreen].forEach(s => s.classList.remove('active'));
+      screen.classList.add('active');
+      if (screen === liveScreen || screen === debriefScreen) {
+        debugPanel.classList.add('visible');
+      } else {
+        debugPanel.classList.remove('visible');
+      }
+    }
+
+    function debugLog(text) {
+      const line = document.createElement('div');
+      line.textContent = text;
+      debugPanel.appendChild(line);
+      debugPanel.scrollTop = debugPanel.scrollHeight;
+    }
+
+    function setSuggestion(text) {
+      suggestionText.style.opacity = 0;
+      setTimeout(() => {
+        suggestionText.textContent = text;
+        suggestionText.classList.remove('placeholder');
+        suggestionText.style.opacity = 1;
+      }, 300);
+    }
+
+    function appendTranscript(text, isFinal) {
+      if (!isFinal) {
+        if (!interimSpan) {
+          interimSpan = document.createElement('span');
+          interimSpan.className = 'interim';
+          transcriptText.appendChild(interimSpan);
+        }
+        interimSpan.textContent = ' ' + text;
+      } else {
+        if (interimSpan) {
+          interimSpan.remove();
+          interimSpan = null;
+        }
+        const span = document.createElement('span');
+        span.className = 'final';
+        span.textContent = text + ' ';
+        transcriptText.appendChild(span);
+      }
+      transcriptSection.scrollTop = transcriptSection.scrollHeight;
+    }
+
+    function formatDuration(ms) {
+      const totalSeconds = Math.floor(ms / 1000);
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      return minutes + ':' + String(seconds).padStart(2, '0');
+    }
+
+    function stopAudio() {
+      if (processor) {
+        processor.disconnect();
+        processor.onaudioprocess = null;
+        processor = null;
+      }
+      if (audioContext) {
+        audioContext.close();
+        audioContext = null;
+      }
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(t => t.stop());
+        mediaStream = null;
+      }
+    }
+
+    function closeWs() {
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
+    }
+
+    function showSimpleEnd() {
+      endDuration.textContent = sessionStart ? formatDuration(Date.now() - sessionStart) : '';
+      showScreen(endScreen);
+    }
+
+    function showDebriefScreen(msg) {
+      const duration = msg.duration || 0;
+      const mins = Math.floor(duration / 60);
+      const secs = duration % 60;
+      const durationStr = mins + ':' + String(secs).padStart(2, '0');
+      debriefMeta.textContent = durationStr + ' · ' + (msg.sentenceCount || 0) + ' sentences';
+      debriefWin.textContent = msg.win || '';
+      debriefGrowth.textContent = msg.growth || '';
+      debriefIdentity.textContent = msg.identity || '';
+      showScreen(debriefScreen);
+    }
+
+    async function startSession() {
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (err) {
+        startError.style.display = 'block';
+        return;
+      }
+
+      startError.style.display = 'none';
+      transcriptText.innerHTML = '';
+      debugPanel.innerHTML = '';
+      interimSpan = null;
+      suggestionText.textContent = 'Listening...';
+      suggestionText.classList.add('placeholder');
+      suggestionText.style.opacity = 1;
+      sessionStart = Date.now();
+      waitingForDebrief = false;
+
+      showScreen(liveScreen);
+
+      const contextValue = contextInput.value.trim();
+
+      const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+      ws = new WebSocket(protocol + '://' + location.host + '/ws');
+
+      ws.onopen = () => {
+        if (contextValue) {
+          ws.send(JSON.stringify({ type: 'context', text: contextValue }));
+        }
+      };
+
+      ws.onmessage = (event) => {
+        debugLog(event.data.substring(0, 200));
+
+        const msg = JSON.parse(event.data);
+
+        if (msg.type === 'transcript') {
+          appendTranscript(msg.text, msg.is_final);
+        }
+
+        if (msg.type === 'suggestion') {
+          setSuggestion(msg.text);
+        }
+
+        if (msg.type === 'debrief') {
+          if (debriefTimeout) { clearTimeout(debriefTimeout); debriefTimeout = null; }
+          waitingForDebrief = false;
+          showDebriefScreen(msg);
+          closeWs();
+        }
+      };
+
+      ws.onclose = () => {
+        if (waitingForDebrief) {
+          waitingForDebrief = false;
+          if (debriefTimeout) { clearTimeout(debriefTimeout); debriefTimeout = null; }
+          showSimpleEnd();
+        }
+      };
+
+      audioContext = new AudioContext({ sampleRate: 16000 });
+      const source = audioContext.createMediaStreamSource(mediaStream);
+      processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+      processor.onaudioprocess = (e) => {
+        const float32 = e.inputBuffer.getChannelData(0);
+        const int16 = new Int16Array(float32.length);
+        for (let i = 0; i < float32.length; i++) {
+          const s = Math.max(-1, Math.min(1, float32[i]));
+          int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(int16.buffer);
+        }
+      };
+
+      source.connect(processor);
+      processor.connect(audioContext.destination);
+    }
+
+    function endSession() {
+      stopAudio();
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'stop' }));
+        waitingForDebrief = true;
+        setSuggestion('Wrapping up your call...');
+        debriefTimeout = setTimeout(() => {
+          debriefTimeout = null;
+          waitingForDebrief = false;
+          closeWs();
+          showSimpleEnd();
+        }, 10000);
+      } else {
+        closeWs();
+        showSimpleEnd();
+      }
+    }
+
+    startBtn.addEventListener('click', startSession);
+    endBtn.addEventListener('click', endSession);
+    newCallBtn.addEventListener('click', () => {
+      contextInput.value = '';
+      showScreen(startScreen);
+    });
+    restartBtn.addEventListener('click', () => showScreen(startScreen));
+  </script>
+</body>
+</html>
