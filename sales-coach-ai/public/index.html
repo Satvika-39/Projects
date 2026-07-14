@@ -1,580 +1,738 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-  <title>Sales Coach AI</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; overflow: hidden; }
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: #0a0a0a;
-      color: #fff;
-    }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Sales Coach AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400;1,9..144,500&family=Albert+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink: #0F1417;          /* deep dusk slate */
+    --surface: #1A2126;      /* raised panel */
+    --surface-2: #151B1F;    /* recessed panel */
+    --line: rgba(232, 228, 218, 0.08);
+    --text: #E8E4DA;         /* warm off-white */
+    --text-dim: #8A9399;     /* muted slate */
+    --text-faint: #58616A;
+    --coach: #E5B566;        /* amber gold — the coach's voice */
+    --coach-dim: rgba(229, 181, 102, 0.14);
+    --win: #7FB58A;          /* sage */
+    --live: #E07A5F;         /* soft ember, not alarm red */
+    --radius: 18px;
+    --font-ui: "Albert Sans", system-ui, -apple-system, sans-serif;
+    --font-coach: "Fraunces", Georgia, serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
 
-    .screen {
-      display: none;
-      height: 100vh;
-      width: 100vw;
-      flex-direction: column;
-    }
-    .screen.active { display: flex; }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
-    /* Start screen */
-    #start-screen {
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      padding: 24px;
-    }
-    #start-screen h1 {
-      font-size: 28px;
-      font-weight: 700;
-    }
-    #start-screen .subtitle {
-      color: #666;
-      font-size: 16px;
-      margin-top: 12px;
-    }
-    #context-input {
-      margin-top: 32px;
-      width: 100%;
-      max-width: 320px;
-      background: #1a1a2e;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 12px;
-      padding: 14px 16px;
-      color: #fff;
-      font-size: 15px;
-      outline: none;
-      font-family: inherit;
-    }
-    #context-input::placeholder { color: #555; }
-    #start-btn {
-      margin-top: 24px;
-      border-radius: 999px;
-      background: #fff;
-      color: #0a0a0a;
-      border: none;
-      padding: 16px 48px;
-      font-size: 16px;
-      font-weight: 700;
-      cursor: pointer;
-    }
-    #start-error {
-      margin-top: 24px;
-      color: #ff5b5b;
-      font-size: 14px;
-      display: none;
-    }
+  html, body {
+    height: 100%;
+    background: var(--ink);
+    color: var(--text);
+    font-family: var(--font-ui);
+    overflow: hidden;
+  }
 
-    /* Live screen */
-    #live-screen { padding-top: 48px; padding-bottom: 80px; }
+  .screen {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    max-width: 640px;
+    margin: 0 auto;
+    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  }
+  .screen.active { display: flex; }
 
-    .top-bar {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 48px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 16px;
-      background: rgba(0, 0, 0, 0.8);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      z-index: 10;
-    }
-    .live-indicator {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .pulse-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: #ff3b30;
-      animation: pulse 1.4s infinite;
-    }
-    @keyframes pulse {
-      0% { opacity: 1; }
-      50% { opacity: 0.3; }
-      100% { opacity: 1; }
-    }
-    .live-text {
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 1px;
-      color: #fff;
-    }
-    #end-btn {
-      background: transparent;
-      border: 1px solid #ff3b30;
-      color: #ff3b30;
-      border-radius: 999px;
-      padding: 6px 16px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-    }
+  button {
+    font-family: var(--font-ui);
+    border: none;
+    cursor: pointer;
+    background: none;
+    color: inherit;
+  }
 
-    /* Suggestion card */
-    #suggestion-card {
-      flex: 6;
-      background: #1a1a2e;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 16px;
-      padding: 24px;
-      margin: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
-      min-height: 0;
-    }
-    #suggestion-text {
-      color: #fff;
-      font-size: 20px;
-      line-height: 1.5;
-      text-align: center;
-      opacity: 1;
-      transition: opacity 300ms ease;
-    }
-    #suggestion-text.placeholder { color: #444; }
+  /* ============ START SCREEN ============ */
+  #startScreen {
+    justify-content: center;
+    padding: 32px 28px;
+    gap: 0;
+  }
 
-    /* Transcript section */
-    #transcript-section {
-      flex: 4;
-      background: #111;
-      border-radius: 12px;
-      margin: 0 16px 16px;
-      padding: 16px;
-      overflow-y: scroll;
-      min-height: 0;
-    }
-    #transcript-section .label {
-      color: #444;
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      margin-bottom: 8px;
-    }
-    #transcript-text {
-      font-size: 14px;
-      line-height: 1.6;
-    }
-    #transcript-text .final { color: #888; }
-    #transcript-text .interim { color: #555; }
+  .eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--coach);
+  }
 
-    /* Debrief screen */
-    #debrief-screen { padding-top: 48px; }
-    #debrief-scroll {
-      flex: 1;
-      overflow-y: auto;
-      padding: 20px 16px;
-      padding-bottom: calc(80px + 20px);
-    }
-    #debrief-title {
-      font-size: 24px;
-      font-weight: 700;
-      text-align: center;
-    }
-    #debrief-meta {
-      color: #666;
-      font-size: 14px;
-      text-align: center;
-      margin-top: 8px;
-      margin-bottom: 24px;
-    }
-    .glass-card {
-      background: #1a1a2e;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 16px;
-      padding: 20px;
-      margin-bottom: 12px;
-    }
-    .debrief-label {
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      margin-bottom: 10px;
-    }
-    .debrief-card-text {
-      color: #fff;
-      font-size: 17px;
-      line-height: 1.5;
-    }
-    .identity-text {
-      font-style: italic;
-      color: #a78bfa;
-      font-size: 17px;
-      line-height: 1.5;
-    }
-    #new-call-btn {
-      display: block;
-      margin: 24px auto 0;
-      border-radius: 999px;
-      background: #fff;
-      color: #0a0a0a;
-      border: none;
-      padding: 16px 48px;
-      font-size: 16px;
-      font-weight: 700;
-      cursor: pointer;
-    }
+  #startScreen h1 {
+    font-family: var(--font-coach);
+    font-weight: 500;
+    font-size: clamp(34px, 9vw, 46px);
+    line-height: 1.12;
+    letter-spacing: -0.01em;
+    margin: 14px 0 10px;
+  }
 
-    /* End screen (fallback) */
-    #end-screen {
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      padding: 24px;
-    }
-    #end-screen h1 {
-      font-size: 24px;
-      font-weight: 700;
-    }
-    #end-screen .duration {
-      color: #888;
-      font-size: 16px;
-      margin-top: 16px;
-    }
-    #end-screen .thanks {
-      color: #666;
-      font-size: 14px;
-      margin-top: 8px;
-    }
-    #restart-btn {
-      margin-top: 48px;
-      border-radius: 999px;
-      background: #fff;
-      color: #0a0a0a;
-      border: none;
-      padding: 16px 48px;
-      font-size: 16px;
-      font-weight: 700;
-      cursor: pointer;
-    }
+  #startScreen .sub {
+    color: var(--text-dim);
+    font-size: 16px;
+    line-height: 1.5;
+    max-width: 34ch;
+  }
 
-    /* Debug panel - fixed at bottom, visible on live + debrief screens */
-    #debug-panel {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 80px;
-      background: #000;
-      color: #0f0;
-      font-family: monospace;
-      font-size: 10px;
-      line-height: 1.4;
-      overflow-y: scroll;
-      padding: 4px 8px;
-      z-index: 5;
-      display: none;
-    }
-    #debug-panel.visible { display: block; }
-  </style>
+  .context-field {
+    margin-top: 40px;
+  }
+  .context-field label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    margin-bottom: 10px;
+  }
+  #contextInput {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px 18px;
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 16px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  #contextInput:focus { border-color: rgba(229, 181, 102, 0.45); }
+  #contextInput::placeholder { color: var(--text-faint); }
+
+  .btn-primary {
+    margin-top: 20px;
+    width: 100%;
+    background: var(--coach);
+    color: #221A0D;
+    font-size: 17px;
+    font-weight: 700;
+    padding: 18px;
+    border-radius: 999px;
+    transition: transform 0.15s ease, opacity 0.15s;
+  }
+  .btn-primary:active { transform: scale(0.98); }
+
+  .mic-note {
+    margin-top: 16px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-faint);
+  }
+
+  .start-error {
+    margin-top: 14px;
+    text-align: center;
+    font-size: 14px;
+    color: var(--live);
+    display: none;
+  }
+
+  /* ============ LIVE SCREEN ============ */
+  #liveScreen { padding: 0; }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 22px 14px;
+  }
+
+  .live-badge {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  /* Signature: the breathing ring — paces the rep's breath */
+  .breath {
+    position: relative;
+    width: 14px;
+    height: 14px;
+  }
+  .breath .dot {
+    position: absolute;
+    inset: 4px;
+    border-radius: 50%;
+    background: var(--live);
+  }
+  .breath .ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 1.5px solid var(--live);
+    opacity: 0.6;
+    animation: breathe 5s ease-in-out infinite;
+  }
+  @keyframes breathe {
+    0%, 100% { transform: scale(1);   opacity: 0.55; }
+    50%      { transform: scale(1.9); opacity: 0.12; }
+  }
+
+  .live-meta { display: flex; flex-direction: column; gap: 1px; }
+  .live-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    color: var(--text);
+  }
+  #timer {
+    font-size: 12px;
+    color: var(--text-faint);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .btn-end {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--live);
+    border: 1px solid rgba(224, 122, 95, 0.35);
+    padding: 9px 20px;
+    border-radius: 999px;
+    transition: background 0.15s;
+  }
+  .btn-end:active { background: rgba(224, 122, 95, 0.12); }
+
+  /* The coach's line — the heart of the screen */
+  .coach-card {
+    flex: 3;
+    min-height: 0;
+    margin: 6px 18px 12px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 24px 26px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+  }
+  .coach-card::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 26px; right: 26px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(229,181,102,0.5), transparent);
+  }
+  .coach-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--coach);
+    margin-bottom: 14px;
+  }
+  .coach-line-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    overflow-y: auto;
+  }
+  #coachLine {
+    font-family: var(--font-coach);
+    font-weight: 500;
+    font-size: clamp(21px, 5.8vw, 27px);
+    line-height: 1.42;
+    letter-spacing: 0.002em;
+    color: var(--text);
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+  #coachLine.waiting {
+    color: var(--text-faint);
+    font-style: italic;
+    font-weight: 400;
+  }
+  #coachLine.fade {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  /* Transcript — quiet, secondary */
+  .transcript-panel {
+    flex: 2;
+    min-height: 0;
+    margin: 0 18px 10px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 16px 20px 12px;
+    display: flex;
+    flex-direction: column;
+  }
+  .transcript-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    margin-bottom: 8px;
+  }
+  #transcript {
+    flex: 1;
+    overflow-y: auto;
+    font-size: 14.5px;
+    line-height: 1.65;
+    color: var(--text-dim);
+    -webkit-overflow-scrolling: touch;
+  }
+  #transcript .interim { color: var(--text-faint); }
+  #transcript p { margin-bottom: 4px; }
+  #transcript .placeholder { color: var(--text-faint); font-style: italic; }
+
+  /* Debug drawer — kept, but tucked away */
+  .debug-drawer {
+    margin: 0 18px 14px;
+  }
+  .debug-toggle {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--text-faint);
+    padding: 6px 2px;
+  }
+  #debugLog {
+    display: none;
+    max-height: 90px;
+    overflow-y: auto;
+    background: #0A0E10;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    line-height: 1.6;
+    color: #6FBF8F;
+    word-break: break-all;
+  }
+  .debug-drawer.open #debugLog { display: block; }
+
+  /* ============ DEBRIEF SCREEN ============ */
+  #debriefScreen {
+    padding: 28px 24px;
+    overflow-y: auto;
+    justify-content: flex-start;
+  }
+  #debriefScreen h2 {
+    font-family: var(--font-coach);
+    font-weight: 500;
+    font-size: 32px;
+    margin: 10px 0 6px;
+  }
+  .debrief-meta {
+    font-size: 13px;
+    color: var(--text-faint);
+    margin-bottom: 26px;
+  }
+  .debrief-block {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 20px 22px;
+    margin-bottom: 14px;
+  }
+  .debrief-block .block-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .debrief-block p {
+    font-size: 16px;
+    line-height: 1.55;
+    color: var(--text);
+  }
+  .block-win .block-label { color: var(--win); }
+  .block-growth .block-label { color: var(--coach); }
+  .block-identity {
+    background: transparent;
+    border: none;
+    padding: 12px 6px 4px;
+  }
+  .block-identity p {
+    font-family: var(--font-coach);
+    font-style: italic;
+    font-weight: 400;
+    font-size: 19px;
+    line-height: 1.5;
+    color: var(--coach);
+  }
+  .debrief-waiting {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 60px 0;
+    color: var(--text-dim);
+    font-size: 15px;
+  }
+  .debrief-waiting .breath { width: 18px; height: 18px; }
+  .debrief-waiting .breath .dot { background: var(--coach); }
+  .debrief-waiting .breath .ring { border-color: var(--coach); }
+
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    .breath .ring { animation: none; opacity: 0.4; }
+    #coachLine { transition: none; }
+  }
+</style>
 </head>
 <body>
 
-  <div id="start-screen" class="screen active">
-    <h1>Sales Coach AI</h1>
-    <p class="subtitle">Real-time call assistance</p>
-    <input id="context-input" type="text"
-      placeholder="What are you selling today? (optional)"
-      maxlength="100" />
-    <button id="start-btn">Start Session</button>
-    <p id="start-error">Mic access needed</p>
+<!-- ============ START ============ -->
+<div class="screen active" id="startScreen">
+  <div class="eyebrow">Sales Coach</div>
+  <h1>Someone in your&nbsp;corner.</h1>
+  <p class="sub">Start your call. I'll listen and hand you the right words when you need them.</p>
+
+  <div class="context-field">
+    <label for="contextInput">What are you selling today? <span style="text-transform:none;letter-spacing:0;font-weight:400">(optional)</span></label>
+    <input id="contextInput" maxlength="100" placeholder="e.g. Solar panels to homeowners" autocomplete="off" />
   </div>
 
-  <div id="live-screen" class="screen">
-    <div class="top-bar">
-      <div class="live-indicator">
-        <span class="pulse-dot"></span>
-        <span class="live-text">LIVE</span>
+  <button class="btn-primary" id="startBtn">Start call</button>
+  <div class="mic-note">Uses your microphone. Nothing is stored.</div>
+  <div class="start-error" id="startError">Microphone access is needed to coach your call. Check Safari settings and try again.</div>
+</div>
+
+<!-- ============ LIVE ============ -->
+<div class="screen" id="liveScreen">
+  <div class="topbar">
+    <div class="live-badge">
+      <div class="breath"><div class="ring"></div><div class="dot"></div></div>
+      <div class="live-meta">
+        <div class="live-label">LIVE</div>
+        <div id="timer">0:00</div>
       </div>
-      <button id="end-btn">End</button>
     </div>
-
-    <div id="suggestion-card">
-      <div id="suggestion-text" class="placeholder">Listening...</div>
-    </div>
-
-    <div id="transcript-section">
-      <div class="label">Live Transcript</div>
-      <div id="transcript-text"></div>
-    </div>
+    <button class="btn-end" id="endBtn">End call</button>
   </div>
 
-  <div id="debrief-screen" class="screen">
-    <div class="top-bar">
-      <span style="font-size: 16px; font-weight: 700;">Call Complete</span>
-      <div></div>
-    </div>
-    <div id="debrief-scroll">
-      <h1 id="debrief-title" style="display:none;"></h1>
-      <p id="debrief-meta"></p>
-      <div class="glass-card">
-        <div class="debrief-label" style="color: #4ade80;">WHAT YOU DID WELL</div>
-        <p id="debrief-win" class="debrief-card-text"></p>
-      </div>
-      <div class="glass-card">
-        <div class="debrief-label" style="color: #60a5fa;">TRY NEXT CALL</div>
-        <p id="debrief-growth" class="debrief-card-text"></p>
-      </div>
-      <div class="glass-card">
-        <p id="debrief-identity" class="identity-text"></p>
-      </div>
-      <button id="new-call-btn">New Call</button>
+  <div class="coach-card">
+    <div class="coach-label">Your coach</div>
+    <div class="coach-line-wrap">
+      <div id="coachLine" class="waiting">Listening&hellip; speak naturally, I'm here.</div>
     </div>
   </div>
 
-  <div id="end-screen" class="screen">
-    <h1>Session ended</h1>
-    <p id="end-duration" class="duration"></p>
-    <p class="thanks">Thanks for using Sales Coach AI</p>
-    <button id="restart-btn">Start New Session</button>
+  <div class="transcript-panel">
+    <div class="transcript-label">You're saying</div>
+    <div id="transcript"><span class="placeholder">Your words will appear here as you speak.</span></div>
   </div>
 
-  <div id="debug-panel"></div>
+  <div class="debug-drawer" id="debugDrawer">
+    <button class="debug-toggle" id="debugToggle">Diagnostics</button>
+    <div id="debugLog"></div>
+  </div>
+</div>
 
-  <script>
-    const startScreen = document.getElementById('start-screen');
-    const liveScreen = document.getElementById('live-screen');
-    const debriefScreen = document.getElementById('debrief-screen');
-    const endScreen = document.getElementById('end-screen');
-    const debugPanel = document.getElementById('debug-panel');
+<!-- ============ DEBRIEF ============ -->
+<div class="screen" id="debriefScreen">
+  <div id="debriefWaiting" class="debrief-waiting">
+    <div class="breath"><div class="ring"></div><div class="dot"></div></div>
+    <div>Your coach is thinking about the call&hellip;</div>
+  </div>
 
-    const startBtn = document.getElementById('start-btn');
-    const startError = document.getElementById('start-error');
-    const endBtn = document.getElementById('end-btn');
-    const newCallBtn = document.getElementById('new-call-btn');
-    const restartBtn = document.getElementById('restart-btn');
-    const contextInput = document.getElementById('context-input');
+  <div id="debriefContent" style="display:none">
+    <div class="eyebrow">Call complete</div>
+    <h2>Here's what I saw.</h2>
+    <div class="debrief-meta" id="debriefMeta"></div>
 
-    const suggestionText = document.getElementById('suggestion-text');
-    const transcriptText = document.getElementById('transcript-text');
-    const transcriptSection = document.getElementById('transcript-section');
-    const endDuration = document.getElementById('end-duration');
-    const debriefMeta = document.getElementById('debrief-meta');
-    const debriefWin = document.getElementById('debrief-win');
-    const debriefGrowth = document.getElementById('debrief-growth');
-    const debriefIdentity = document.getElementById('debrief-identity');
+    <div class="debrief-block block-win">
+      <div class="block-label">What you did well</div>
+      <p id="debriefWin"></p>
+    </div>
 
-    let ws = null;
-    let audioContext = null;
-    let mediaStream = null;
-    let processor = null;
-    let sessionStart = null;
-    let interimSpan = null;
-    let debriefTimeout = null;
-    let waitingForDebrief = false;
+    <div class="debrief-block block-growth">
+      <div class="block-label">Try next call</div>
+      <p id="debriefGrowth"></p>
+    </div>
 
-    function showScreen(screen) {
-      [startScreen, liveScreen, debriefScreen, endScreen].forEach(s => s.classList.remove('active'));
-      screen.classList.add('active');
-      if (screen === liveScreen || screen === debriefScreen) {
-        debugPanel.classList.add('visible');
-      } else {
-        debugPanel.classList.remove('visible');
-      }
-    }
+    <div class="debrief-block block-identity">
+      <p id="debriefIdentity"></p>
+    </div>
 
-    function debugLog(text) {
-      const line = document.createElement('div');
-      line.textContent = text;
-      debugPanel.appendChild(line);
-      debugPanel.scrollTop = debugPanel.scrollHeight;
-    }
+    <button class="btn-primary" id="newCallBtn">New call</button>
+  </div>
+</div>
 
-    function setSuggestion(text) {
-      suggestionText.style.opacity = 0;
-      setTimeout(() => {
-        suggestionText.textContent = text;
-        suggestionText.classList.remove('placeholder');
-        suggestionText.style.opacity = 1;
-      }, 300);
-    }
+<script>
+(function () {
+  "use strict";
 
-    function appendTranscript(text, isFinal) {
-      if (!isFinal) {
-        if (!interimSpan) {
-          interimSpan = document.createElement('span');
-          interimSpan.className = 'interim';
-          transcriptText.appendChild(interimSpan);
-        }
-        interimSpan.textContent = ' ' + text;
-      } else {
-        if (interimSpan) {
-          interimSpan.remove();
-          interimSpan = null;
-        }
-        const span = document.createElement('span');
-        span.className = 'final';
-        span.textContent = text + ' ';
-        transcriptText.appendChild(span);
-      }
-      transcriptSection.scrollTop = transcriptSection.scrollHeight;
-    }
+  // ---------- Elements ----------
+  var startScreen = document.getElementById("startScreen");
+  var liveScreen = document.getElementById("liveScreen");
+  var debriefScreen = document.getElementById("debriefScreen");
+  var startBtn = document.getElementById("startBtn");
+  var endBtn = document.getElementById("endBtn");
+  var newCallBtn = document.getElementById("newCallBtn");
+  var contextInput = document.getElementById("contextInput");
+  var startError = document.getElementById("startError");
+  var coachLine = document.getElementById("coachLine");
+  var transcriptEl = document.getElementById("transcript");
+  var timerEl = document.getElementById("timer");
+  var debugLog = document.getElementById("debugLog");
+  var debugToggle = document.getElementById("debugToggle");
+  var debugDrawer = document.getElementById("debugDrawer");
+  var debriefWaiting = document.getElementById("debriefWaiting");
+  var debriefContent = document.getElementById("debriefContent");
 
-    function formatDuration(ms) {
-      const totalSeconds = Math.floor(ms / 1000);
-      const minutes = Math.floor(totalSeconds / 60);
-      const seconds = totalSeconds % 60;
-      return minutes + ':' + String(seconds).padStart(2, '0');
-    }
+  // ---------- State ----------
+  var ws = null;
+  var audioContext = null;
+  var scriptNode = null;
+  var sourceNode = null;
+  var mediaStream = null;
+  var timerInterval = null;
+  var startTime = 0;
+  var interimSpan = null;
+  var ended = false;
+  var debriefTimeout = null;
 
-    function stopAudio() {
-      if (processor) {
-        processor.disconnect();
-        processor.onaudioprocess = null;
-        processor = null;
-      }
-      if (audioContext) {
-        audioContext.close();
-        audioContext = null;
-      }
-      if (mediaStream) {
-        mediaStream.getTracks().forEach(t => t.stop());
-        mediaStream = null;
-      }
-    }
-
-    function closeWs() {
-      if (ws) {
-        ws.close();
-        ws = null;
-      }
-    }
-
-    function showSimpleEnd() {
-      endDuration.textContent = sessionStart ? formatDuration(Date.now() - sessionStart) : '';
-      showScreen(endScreen);
-    }
-
-    function showDebriefScreen(msg) {
-      const duration = msg.duration || 0;
-      const mins = Math.floor(duration / 60);
-      const secs = duration % 60;
-      const durationStr = mins + ':' + String(secs).padStart(2, '0');
-      debriefMeta.textContent = durationStr + ' · ' + (msg.sentenceCount || 0) + ' sentences';
-      debriefWin.textContent = msg.win || '';
-      debriefGrowth.textContent = msg.growth || '';
-      debriefIdentity.textContent = msg.identity || '';
-      showScreen(debriefScreen);
-    }
-
-    async function startSession() {
-      try {
-        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      } catch (err) {
-        startError.style.display = 'block';
-        return;
-      }
-
-      startError.style.display = 'none';
-      transcriptText.innerHTML = '';
-      debugPanel.innerHTML = '';
-      interimSpan = null;
-      suggestionText.textContent = 'Listening...';
-      suggestionText.classList.add('placeholder');
-      suggestionText.style.opacity = 1;
-      sessionStart = Date.now();
-      waitingForDebrief = false;
-
-      showScreen(liveScreen);
-
-      const contextValue = contextInput.value.trim();
-
-      const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-      ws = new WebSocket(protocol + '://' + location.host + '/ws');
-
-      ws.onopen = () => {
-        if (contextValue) {
-          ws.send(JSON.stringify({ type: 'context', text: contextValue }));
-        }
-      };
-
-      ws.onmessage = (event) => {
-        debugLog(event.data.substring(0, 200));
-
-        const msg = JSON.parse(event.data);
-
-        if (msg.type === 'transcript') {
-          appendTranscript(msg.text, msg.is_final);
-        }
-
-        if (msg.type === 'suggestion') {
-          setSuggestion(msg.text);
-        }
-
-        if (msg.type === 'debrief') {
-          if (debriefTimeout) { clearTimeout(debriefTimeout); debriefTimeout = null; }
-          waitingForDebrief = false;
-          showDebriefScreen(msg);
-          closeWs();
-        }
-      };
-
-      ws.onclose = () => {
-        if (waitingForDebrief) {
-          waitingForDebrief = false;
-          if (debriefTimeout) { clearTimeout(debriefTimeout); debriefTimeout = null; }
-          showSimpleEnd();
-        }
-      };
-
-      audioContext = new AudioContext({ sampleRate: 16000 });
-      const source = audioContext.createMediaStreamSource(mediaStream);
-      processor = audioContext.createScriptProcessor(4096, 1, 1);
-
-      processor.onaudioprocess = (e) => {
-        const float32 = e.inputBuffer.getChannelData(0);
-        const int16 = new Int16Array(float32.length);
-        for (let i = 0; i < float32.length; i++) {
-          const s = Math.max(-1, Math.min(1, float32[i]));
-          int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-        }
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(int16.buffer);
-        }
-      };
-
-      source.connect(processor);
-      processor.connect(audioContext.destination);
-    }
-
-    function endSession() {
-      stopAudio();
-
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'stop' }));
-        waitingForDebrief = true;
-        setSuggestion('Wrapping up your call...');
-        debriefTimeout = setTimeout(() => {
-          debriefTimeout = null;
-          waitingForDebrief = false;
-          closeWs();
-          showSimpleEnd();
-        }, 10000);
-      } else {
-        closeWs();
-        showSimpleEnd();
-      }
-    }
-
-    startBtn.addEventListener('click', startSession);
-    endBtn.addEventListener('click', endSession);
-    newCallBtn.addEventListener('click', () => {
-      contextInput.value = '';
-      showScreen(startScreen);
+  // ---------- Helpers ----------
+  function show(screen) {
+    [startScreen, liveScreen, debriefScreen].forEach(function (s) {
+      s.classList.remove("active");
     });
-    restartBtn.addEventListener('click', () => showScreen(startScreen));
-  </script>
+    screen.classList.add("active");
+  }
+
+  function dbg(text) {
+    var line = document.createElement("div");
+    var t = new Date();
+    line.textContent =
+      ("0" + t.getHours()).slice(-2) + ":" +
+      ("0" + t.getMinutes()).slice(-2) + ":" +
+      ("0" + t.getSeconds()).slice(-2) + " " + text;
+    debugLog.appendChild(line);
+    while (debugLog.childNodes.length > 60) debugLog.removeChild(debugLog.firstChild);
+    debugLog.scrollTop = debugLog.scrollHeight;
+  }
+
+  debugToggle.addEventListener("click", function () {
+    debugDrawer.classList.toggle("open");
+  });
+
+  function formatTime(sec) {
+    var m = Math.floor(sec / 60);
+    var s = Math.floor(sec % 60);
+    return m + ":" + ("0" + s).slice(-2);
+  }
+
+  function startTimer() {
+    startTime = Date.now();
+    timerInterval = setInterval(function () {
+      timerEl.textContent = formatTime((Date.now() - startTime) / 1000);
+    }, 1000);
+  }
+
+  function stopTimer() {
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  }
+
+  function setCoachLine(text, waiting) {
+    coachLine.classList.add("fade");
+    setTimeout(function () {
+      coachLine.textContent = text;
+      coachLine.classList.toggle("waiting", !!waiting);
+      coachLine.classList.remove("fade");
+    }, 300);
+  }
+
+  function appendFinalTranscript(text) {
+    var ph = transcriptEl.querySelector(".placeholder");
+    if (ph) ph.remove();
+    if (interimSpan) { interimSpan.remove(); interimSpan = null; }
+    var p = document.createElement("p");
+    p.textContent = text;
+    transcriptEl.appendChild(p);
+    transcriptEl.scrollTop = transcriptEl.scrollHeight;
+  }
+
+  function showInterim(text) {
+    var ph = transcriptEl.querySelector(".placeholder");
+    if (ph) ph.remove();
+    if (!interimSpan) {
+      interimSpan = document.createElement("p");
+      interimSpan.className = "interim";
+      transcriptEl.appendChild(interimSpan);
+    }
+    interimSpan.textContent = text;
+    transcriptEl.scrollTop = transcriptEl.scrollHeight;
+  }
+
+  // ---------- Audio pipeline (Safari iOS compatible) ----------
+  function startAudio(stream) {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    audioContext = new AC({ sampleRate: 16000 });
+    // Some browsers ignore the sampleRate hint; resample if needed
+    var actualRate = audioContext.sampleRate;
+    dbg("AudioContext rate: " + actualRate);
+
+    sourceNode = audioContext.createMediaStreamSource(stream);
+    scriptNode = audioContext.createScriptProcessor(4096, 1, 1);
+
+    scriptNode.onaudioprocess = function (e) {
+      if (!ws || ws.readyState !== WebSocket.OPEN || ended) return;
+      var float32 = e.inputBuffer.getChannelData(0);
+      var input = float32;
+
+      // Downsample if the context refused 16k (e.g. runs at 44.1k/48k)
+      if (actualRate !== 16000) {
+        var ratio = actualRate / 16000;
+        var outLen = Math.floor(float32.length / ratio);
+        var down = new Float32Array(outLen);
+        for (var i = 0; i < outLen; i++) {
+          down[i] = float32[Math.floor(i * ratio)];
+        }
+        input = down;
+      }
+
+      var int16 = new Int16Array(input.length);
+      for (var j = 0; j < input.length; j++) {
+        var s = Math.max(-1, Math.min(1, input[j]));
+        int16[j] = s < 0 ? s * 0x8000 : s * 0x7fff;
+      }
+      ws.send(int16.buffer);
+    };
+
+    sourceNode.connect(scriptNode);
+    scriptNode.connect(audioContext.destination);
+  }
+
+  function teardownAudio() {
+    try { if (scriptNode) { scriptNode.disconnect(); scriptNode.onaudioprocess = null; } } catch (e) {}
+    try { if (sourceNode) sourceNode.disconnect(); } catch (e) {}
+    try { if (audioContext) audioContext.close(); } catch (e) {}
+    try {
+      if (mediaStream) mediaStream.getTracks().forEach(function (t) { t.stop(); });
+    } catch (e) {}
+    scriptNode = null; sourceNode = null; audioContext = null; mediaStream = null;
+  }
+
+  // ---------- WebSocket ----------
+  function connect() {
+    var protocol = location.protocol === "https:" ? "wss" : "ws";
+    ws = new WebSocket(protocol + "://" + location.host + "/ws");
+    ws.binaryType = "arraybuffer";
+
+    ws.onopen = function () {
+      dbg("WebSocket connected");
+      var ctx = contextInput.value.trim();
+      if (ctx) {
+        ws.send(JSON.stringify({ type: "context", text: ctx }));
+        dbg("Sent context: " + ctx);
+      }
+      ws.send(JSON.stringify({ type: "start" }));
+    };
+
+    ws.onmessage = function (event) {
+      if (typeof event.data !== "string") return;
+      dbg(event.data.substring(0, 160));
+      var msg;
+      try { msg = JSON.parse(event.data); } catch (e) { return; }
+
+      if (msg.type === "status") {
+        // Server ready
+      } else if (msg.type === "transcript") {
+        if (msg.is_final) appendFinalTranscript(msg.text);
+        else showInterim(msg.text);
+      } else if (msg.type === "suggestion") {
+        setCoachLine(msg.text, false);
+      } else if (msg.type === "debrief") {
+        renderDebrief(msg);
+      } else if (msg.type === "debug") {
+        // already logged above
+      }
+    };
+
+    ws.onerror = function () { dbg("WebSocket error"); };
+    ws.onclose = function () { dbg("WebSocket closed"); };
+  }
+
+  // ---------- Debrief ----------
+  function renderDebrief(msg) {
+    if (debriefTimeout) { clearTimeout(debriefTimeout); debriefTimeout = null; }
+    debriefWaiting.style.display = "none";
+    debriefContent.style.display = "block";
+    document.getElementById("debriefWin").textContent = msg.win || "You showed up and made the call — that's the hardest part.";
+    document.getElementById("debriefGrowth").textContent = msg.growth || "Next call, try pausing after your key point.";
+    document.getElementById("debriefIdentity").textContent = msg.identity || "You're building the habit of selling. It compounds.";
+    var meta = [];
+    if (typeof msg.duration === "number") meta.push(formatTime(msg.duration));
+    if (typeof msg.sentenceCount === "number") meta.push(msg.sentenceCount + " things said");
+    document.getElementById("debriefMeta").textContent = meta.join(" · ");
+    try { if (ws) ws.close(); } catch (e) {}
+  }
+
+  // ---------- Flow ----------
+  startBtn.addEventListener("click", function () {
+    startError.style.display = "none";
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      startError.style.display = "block";
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      mediaStream = stream;
+      ended = false;
+      show(liveScreen);
+      startTimer();
+      connect();
+      startAudio(stream);
+    }).catch(function (err) {
+      dbg("Mic error: " + err.message);
+      startError.style.display = "block";
+    });
+  });
+
+  endBtn.addEventListener("click", function () {
+    ended = true;
+    stopTimer();
+    teardownAudio();
+    show(debriefScreen);
+    debriefWaiting.style.display = "flex";
+    debriefContent.style.display = "none";
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "stop" }));
+      dbg("Sent stop, waiting for debrief");
+      // Fallback if debrief never arrives
+      debriefTimeout = setTimeout(function () {
+        renderDebrief({
+          duration: (Date.now() - startTime) / 1000
+        });
+      }, 12000);
+    } else {
+      renderDebrief({ duration: (Date.now() - startTime) / 1000 });
+    }
+  });
+
+  newCallBtn.addEventListener("click", function () {
+    // Reset state
+    transcriptEl.innerHTML = '<span class="placeholder">Your words will appear here as you speak.</span>';
+    coachLine.textContent = "Listening… speak naturally, I'm here.";
+    coachLine.classList.add("waiting");
+    timerEl.textContent = "0:00";
+    interimSpan = null;
+    debugLog.innerHTML = "";
+    show(startScreen);
+  });
+})();
+</script>
 </body>
 </html>
